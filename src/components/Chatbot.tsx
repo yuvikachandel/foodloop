@@ -1,192 +1,166 @@
-import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Sparkles, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { MessageCircle, X, Minus } from 'lucide-react';
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
+const BOT_ID = 'a275b4b0-234a-42bb-b11d-44fccf440bf6';
+const INJECT_SCRIPT_URL = 'https://cdn.botpress.cloud/webchat/v3.3/inject.js';
+
+declare global {
+  interface Window {
+    botpress?: {
+      init: (config: Record<string, unknown>) => void;
+      open: () => void;
+      close: () => void;
+      toggle: () => void;
+      on: (event: string, callback: () => void) => void;
+    };
+  }
+}
+
+let scriptLoading: Promise<void> | null = null;
+
+function loadInjectScript(): Promise<void> {
+  if (scriptLoading) return scriptLoading;
+  if (window.botpress) return Promise.resolve();
+
+  scriptLoading = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${INJECT_SCRIPT_URL}"]`);
+    if (existing) {
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => reject(new Error('Failed to load Botpress script')));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = INJECT_SCRIPT_URL;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Botpress script'));
+    document.head.appendChild(script);
+  });
+
+  return scriptLoading;
 }
 
 export function Chatbot() {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [configError, setConfigError] = useState<string | null>(null);
-  const [connected, setConnected] = useState<boolean | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const initRef = useRef(false);
+
+  const openWebchat = useCallback(() => {
+    try {
+      window.botpress?.open();
+    } catch {
+      // ignore — window may not be ready
+    }
+  }, []);
+
+  const closeWebchat = useCallback(() => {
+    try {
+      window.botpress?.close();
+    } catch {
+      // ignore
+    }
+  }, []);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, loading]);
+    let cancelled = false;
 
-  async function checkAvailability() {
-    try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/foodloop-chat`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ message: 'hello' }),
+    loadInjectScript()
+      .then(() => {
+        if (cancelled || !window.botpress || initRef.current) return;
+        initRef.current = true;
+
+        window.botpress.init({
+          botId: BOT_ID,
+          configuration: {
+            variant: 'soft',
+            themeMode: 'light',
+            fontFamily: 'inter',
+            color: '#1e6b4f',
+          },
+        });
+
+        window.botpress.on('webchat:initialized', () => {
+          if (!cancelled) setReady(true);
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true);
       });
-      if (res.ok) {
-        setConnected(true);
-        setConfigError(null);
-        return true;
-      }
-      if (res.status === 503) {
-        setConnected(false);
-        setConfigError('The AI assistant is not configured yet. An API key needs to be added on the server side to enable real AI responses.');
-        return false;
-      }
-      setConnected(false);
-      setConfigError('The AI assistant could not be reached. Please try again later.');
-      return false;
-    } catch {
-      setConnected(false);
-      setConfigError('Could not connect to the AI assistant. Please check your connection.');
-      return false;
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function handleToggle() {
+    if (loadError) return;
+    if (open) {
+      closeWebchat();
+      setOpen(false);
+    } else {
+      openWebchat();
+      setOpen(true);
     }
   }
 
-  async function handleSend() {
-    if (!input.trim() || loading) return;
-
-    const userMessage = input.trim();
-    setInput('');
-    setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
-    setLoading(true);
-
-    if (connected === null) {
-      const available = await checkAvailability();
-      if (!available) {
-        setLoading(false);
-        return;
-      }
-    } else if (connected === false) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/foodloop-chat`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ message: userMessage }),
-      });
-
-      if (!res.ok) {
-        if (res.status === 503) {
-          setConnected(false);
-          setConfigError('The AI assistant is not configured yet. An API key needs to be added on the server side to enable real AI responses.');
-        } else {
-          throw new Error(`Request failed (${res.status})`);
-        }
-        setLoading(false);
-        return;
-      }
-
-      const data = await res.json();
-      if (!data.reply || typeof data.reply !== 'string') {
-        throw new Error('Unexpected response format');
-      }
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
-    } catch (err) {
-      setMessages((prev) => [...prev, {
-        role: 'assistant',
-        content: 'Sorry, I could not process your request right now. Please try again later.',
-      }]);
-      // eslint-disable-next-line no-console
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  function handleMinimize() {
+    closeWebchat();
+    setOpen(false);
   }
 
   return (
     <>
-      <button
-        onClick={() => setOpen(!open)}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-forest-600 text-white shadow-premium-lg hover:bg-forest-700 transition-all hover:scale-105 flex items-center justify-center"
-        title="Ask FoodLoop AI"
-      >
-        {open ? <X size={24} /> : <MessageCircle size={24} />}
-      </button>
+      {/* Custom FoodLoop-branded launcher — sits above Botpress's default FAB which is hidden via CSS */}
+      <div className="fixed bottom-6 right-6 z-[60] flex flex-col items-end gap-2">
+        {open && (
+          <button
+            onClick={handleMinimize}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-forest-700 text-xs font-semibold shadow-premium border border-cream-200 hover:bg-cream-50 transition-colors animate-fade-in"
+            title="Minimize chat"
+          >
+            <Minus size={14} />
+            Minimize
+          </button>
+        )}
 
-      {open && (
-        <div className="fixed bottom-24 right-6 z-40 w-[calc(100vw-3rem)] sm:w-96 card shadow-premium-lg flex flex-col animate-scale-in" style={{ maxHeight: '70vh' }}>
-          <div className="p-4 border-b border-cream-200 bg-cream-50 rounded-t-2xl">
-            <div className="flex items-center gap-2">
-              <Sparkles size={18} className="text-accent-600" />
-              <div>
-                <h3 className="font-semibold text-forest-900 text-sm">FoodLoop Assistant</h3>
-                <p className="text-xs text-forest-500">Ask about food safety, listings, or how the platform works</p>
-              </div>
-            </div>
-          </div>
-
-          {configError && (
-            <div className="p-3 bg-accent-50 border-b border-accent-100 flex items-start gap-2">
-              <AlertCircle size={16} className="text-accent-600 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-accent-800">{configError}</p>
-            </div>
+        <button
+          onClick={handleToggle}
+          disabled={loadError}
+          className="group flex items-center gap-2 pl-4 pr-5 h-14 rounded-full bg-forest-600 text-white shadow-premium-lg hover:bg-forest-700 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Ask FoodLoop"
+          aria-label="Ask FoodLoop"
+        >
+          {open ? (
+            <X size={22} className="flex-shrink-0" />
+          ) : (
+            <MessageCircle size={22} className="flex-shrink-0" />
           )}
+          <span className="text-sm font-semibold whitespace-nowrap">
+            {open ? 'Close' : 'Ask FoodLoop'}
+          </span>
+        </button>
+      </div>
 
-          <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[200px]">
-            {messages.length === 0 && !configError && (
-              <div className="text-center py-8">
-                <div className="w-12 h-12 rounded-2xl bg-cream-100 flex items-center justify-center mx-auto mb-3">
-                  <Sparkles size={24} className="text-accent-500" />
-                </div>
-                <p className="text-sm text-forest-600 mb-1">Hi! I'm the FoodLoop assistant.</p>
-                <p className="text-xs text-forest-500">Ask me anything about food safety, donating, or requesting food.</p>
-              </div>
-            )}
-            {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${
-                  msg.role === 'user'
-                    ? 'bg-forest-600 text-white'
-                    : 'bg-cream-100 text-forest-800'
-                }`}>
-                  {msg.content}
-                </div>
-              </div>
-            ))}
-            {loading && (
-              <div className="flex justify-start">
-                <div className="bg-cream-100 rounded-xl px-3 py-2 flex items-center gap-2">
-                  <div className="w-2 h-2 bg-accent-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 bg-accent-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-accent-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-              </div>
-            )}
+      {/* Status / error indicator shown while the Botpress webchat loads */}
+      {open && !ready && !loadError && (
+        <div className="fixed bottom-24 right-6 z-[55] w-[calc(100vw-3rem)] sm:w-96 card shadow-premium-lg p-6 animate-scale-in">
+          <div className="flex items-center gap-3">
+            <div className="w-5 h-5 border-2 border-forest-200 border-t-forest-600 rounded-full animate-spin flex-shrink-0" />
+            <p className="text-sm text-forest-700">Connecting to FoodLoop Assistant...</p>
           </div>
+        </div>
+      )}
 
-          <div className="p-3 border-t border-cream-200">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                disabled={loading}
-                className="input text-sm"
-                placeholder="Type your question..."
-              />
-              <button onClick={handleSend} disabled={loading || !input.trim()} className="btn-primary px-3 py-2.5">
-                <Send size={16} />
-              </button>
-            </div>
-          </div>
+      {open && loadError && (
+        <div className="fixed bottom-24 right-6 z-[55] w-[calc(100vw-3rem)] sm:w-96 card shadow-premium-lg p-6 animate-scale-in">
+          <p className="text-sm text-forest-700 mb-2">
+            The chatbot could not be loaded right now.
+          </p>
+          <p className="text-xs text-forest-500">
+            Make sure you are connected to the internet and try again. If the problem
+            persists, verify your bot is published in the Botpress Dashboard.
+          </p>
         </div>
       )}
     </>

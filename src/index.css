@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-cream-50 text-espresso font-sans;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+  }
+  h1 { @apply text-4xl sm:text-5xl; }
+  section[id] {
+    scroll-margin-top: 4rem;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-forest-600 px-5 py-3 text-sm font-semibold text-white shadow-premium transition-all hover:bg-forest-700 hover:shadow-premium-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-forest-700 border border-forest-200 shadow-sm transition-all hover:bg-cream-50 hover:border-accent-400 hover:text-forest-800 active:scale-[0.98] disabled:opacity-50;
+  }
+  .btn-accent {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-accent-500 px-5 py-3 text-sm font-semibold text-forest-900 shadow-premium transition-all hover:bg-accent-600 hover:shadow-premium-lg active:scale-[0.98] disabled:opacity-50;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-cream-100 px-4 py-2 text-sm font-semibold text-forest-800 border border-cream-300 transition-all hover:bg-cream-200 active:scale-[0.98];
+  }
+  .card {
+    @apply rounded-2xl bg-white border border-cream-200/60 shadow-premium;
+  }
+  .input {
+    @apply w-full rounded-xl border border-cream-300 bg-white px-4 py-2.5 text-sm text-espresso placeholder:text-cream-400 transition-all focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/15;
+  }
+  .label {
+    @apply block text-sm font-medium text-forest-800 mb-1.5;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold;
+  }
+}
+
+/* Premium scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #F8F5ED;
+}
+::-webkit-scrollbar-thumb {
+  background: #C8D4C9;
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #D6B77A;
+}

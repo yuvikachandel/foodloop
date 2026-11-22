@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
@@ -11,23 +11,48 @@ import { NgoDashboard } from '@/pages/NgoDashboard';
 import { VolunteerDashboard } from '@/pages/VolunteerDashboard';
 import { AdminDashboard } from '@/pages/AdminDashboard';
 
+function pageFromHash(hash: string): string {
+  if (!hash || hash === '#' || hash === '#home') return 'home';
+  return hash.slice(1);
+}
+
+function pageToHash(page: string): string {
+  return `#${page}`;
+}
+
 function AppContent() {
   const { session, profile, loading } = useAuth();
-  const [page, setPage] = useState('home');
+  const [page, setPage] = useState<string>(() => pageFromHash(window.location.hash));
   const [scrollTarget, setScrollTarget] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState('home');
-  const [pageHistory, setPageHistory] = useState<string[]>([]);
+
+  const resolvePage = useCallback((target: string, role?: string | null): string => {
+    if (target === 'dashboard' && role) return `dashboard-${role}`;
+    return target;
+  }, []);
+
+  // Listen to browser back/forward (popstate) and update page accordingly.
+  useEffect(() => {
+    function onPopState() {
+      const next = pageFromHash(window.location.hash);
+      setPage(next);
+      setActiveSection(next === 'home' ? 'home' : '');
+    }
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   // Auto-redirect to dashboard when logged in and on auth pages
   useEffect(() => {
     if (session && profile && (page === 'login' || page === 'register')) {
-      setPage(`dashboard-${profile.role}`);
+      const dash = `dashboard-${profile.role}`;
+      window.history.pushState(null, '', pageToHash(dash));
+      setPage(dash);
       setActiveSection('');
     }
   }, [session, profile, page]);
 
   // Scroll to a section whenever scrollTarget changes.
-  // Uses a state (not a ref) so it fires even when page is already 'home'.
   useEffect(() => {
     if (!scrollTarget) return;
     const id = scrollTarget;
@@ -41,58 +66,44 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, [scrollTarget]);
 
-  function navigate(target: string) {
-    // "back" returns to the previous page, or the role dashboard if none
+  const navigate = useCallback((target: string) => {
+    // "back" — use native browser history to go one step back.
+    // If no app history exists, fall back to the role dashboard.
     if (target === 'back') {
-      const prev = pageHistory.length > 0 ? pageHistory[pageHistory.length - 1] : null;
-      if (prev) {
-        setPageHistory((h) => h.slice(0, -1));
-        setPage(prev);
-        setActiveSection(prev === 'home' ? 'home' : '');
-        window.scrollTo(0, 0);
-      } else if (profile) {
-        const dash = `dashboard-${profile.role}`;
-        setPage(dash);
-        setActiveSection('');
-        window.scrollTo(0, 0);
-      } else {
-        setPage('home');
-        setActiveSection('home');
-        window.scrollTo(0, 0);
+      if (window.history.length > 1) {
+        window.history.back();
+        return;
       }
-      return;
-    }
-
-    // "dashboard" resolves to the user's role dashboard
-    if (target === 'dashboard' && profile) {
-      if (page !== `dashboard-${profile.role}`) {
-        setPageHistory((h) => [...h, page]);
-      }
-      setPage(`dashboard-${profile.role}`);
-      setActiveSection('');
+      // No browser history — go to role dashboard or home
+      const fallback = profile ? `dashboard-${profile.role}` : 'home';
+      window.history.pushState(null, '', pageToHash(fallback));
+      setPage(fallback);
+      setActiveSection(fallback === 'home' ? 'home' : '');
       window.scrollTo(0, 0);
       return;
     }
 
-    // Homepage sections that need scroll-to-section behavior
+    const resolved = resolvePage(target, profile?.role);
+
+    // Homepage section scroll — update hash to 'home' and scroll to section
     const homeSections = ['about', 'how', 'features', 'impact', 'get-started'];
-    if (homeSections.includes(target)) {
+    if (homeSections.includes(resolved)) {
       if (page !== 'home') {
-        setPageHistory((h) => [...h, page]);
+        window.history.pushState(null, '', pageToHash('home'));
       }
       setPage('home');
-      setActiveSection(target);
-      setScrollTarget(target);
+      setActiveSection(resolved);
+      setScrollTarget(resolved);
       return;
     }
 
-    if (page !== target) {
-      setPageHistory((h) => [...h, page]);
+    if (page !== resolved) {
+      window.history.pushState(null, '', pageToHash(resolved));
+      setPage(resolved);
+      setActiveSection(resolved === 'home' ? 'home' : '');
+      window.scrollTo(0, 0);
     }
-    setPage(target);
-    setActiveSection(target === 'home' ? 'home' : '');
-    window.scrollTo(0, 0);
-  }
+  }, [page, profile, resolvePage]);
 
   // Auth guard for dashboard pages
   const isDashboardPage = page.startsWith('dashboard-');

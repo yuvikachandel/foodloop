@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { MessageCircle, X, Minus } from 'lucide-react';
 
-const BOT_ID = 'a275b4b0-234a-42bb-b11d-44fccf440bf6';
-const INJECT_SCRIPT_URL = 'https://cdn.botpress.cloud/webchat/v3.3/inject.js';
+const INJECT_SCRIPT_URL = 'https://cdn.botpress.cloud/webchat/v5.0/inject.js';
+const CONFIG_SCRIPT_URL = 'https://files.bpcontent.cloud/2026/11/22/12/20261122122236-7UTB7E09.js';
 
 declare global {
   interface Window {
@@ -16,28 +16,44 @@ declare global {
   }
 }
 
-let scriptLoading: Promise<void> | null = null;
+let scriptsLoading: Promise<void> | null = null;
 
-function loadInjectScript(): Promise<void> {
-  if (scriptLoading) return scriptLoading;
-  if (window.botpress) return Promise.resolve();
-
-  scriptLoading = new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${INJECT_SCRIPT_URL}"]`);
+function loadScript(src: string, defer = false): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${src}"]`);
     if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject(new Error('Failed to load Botpress script')));
+      if (existing.getAttribute('data-loaded') === 'true') {
+        resolve();
+        return;
+      }
+      existing.addEventListener('load', () => {
+        existing.setAttribute('data-loaded', 'true');
+        resolve();
+      });
+      existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)));
       return;
     }
     const script = document.createElement('script');
-    script.src = INJECT_SCRIPT_URL;
+    script.src = src;
     script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Botpress script'));
+    if (defer) script.defer = true;
+    script.onload = () => {
+      script.setAttribute('data-loaded', 'true');
+      resolve();
+    };
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
     document.head.appendChild(script);
   });
+}
 
-  return scriptLoading;
+function loadBotpressScripts(): Promise<void> {
+  if (scriptsLoading) return scriptsLoading;
+  if (window.botpress) return Promise.resolve();
+
+  scriptsLoading = loadScript(INJECT_SCRIPT_URL)
+    .then(() => loadScript(CONFIG_SCRIPT_URL, true));
+
+  return scriptsLoading;
 }
 
 export function Chatbot() {
@@ -65,24 +81,22 @@ export function Chatbot() {
   useEffect(() => {
     let cancelled = false;
 
-    loadInjectScript()
+    loadBotpressScripts()
       .then(() => {
-        if (cancelled || !window.botpress || initRef.current) return;
+        if (cancelled || initRef.current) return;
         initRef.current = true;
 
-        window.botpress.init({
-          botId: BOT_ID,
-          configuration: {
-            variant: 'soft',
-            themeMode: 'light',
-            fontFamily: 'inter',
-            color: '#1e6b4f',
-          },
-        });
-
-        window.botpress.on('webchat:initialized', () => {
+        // The config bundle script calls window.botpress.init() with the
+        // Client ID and bot configuration. We just listen for readiness.
+        window.botpress?.on('webchat:initialized', () => {
           if (!cancelled) setReady(true);
         });
+
+        // Fallback: if the event already fired before our listener attached,
+        // mark ready after a short delay if botpress is present.
+        setTimeout(() => {
+          if (!cancelled && window.botpress && !ready) setReady(true);
+        }, 3000);
       })
       .catch(() => {
         if (!cancelled) setLoadError(true);
@@ -91,7 +105,7 @@ export function Chatbot() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ready]);
 
   function handleToggle() {
     if (loadError) return;

@@ -21,7 +21,7 @@
 - Smooth-scroll to in-page sections via `scrollIntoView({ behavior: 'smooth' })`; active nav link reflects current scroll position (`activeSection` state).
 - Footer mirrors main nav links and also scrolls to homepage sections.
 - Preserve existing colors, logo, content, and features — do not redesign when fixing bugs.
-- Chatbot: custom FoodLoop-branded floating launcher ("Ask FoodLoop") positioned bottom-right; chat panel opens above the launcher. Botpress default floating button hidden via CSS. Loading indicator and error handling retained.
+- Chatbot: Botpress default blue floating button is used (bottom-right); custom green "Ask FoodLoop" launcher was removed. `Chatbot.tsx` now only loads Botpress scripts without rendering any custom button. No CSS hiding the default Botpress button.
 
 ## Decisions, constraints & rationale
 
@@ -30,7 +30,8 @@
 - "Get Started" scrolls to the homepage role-selection section (`#get-started`) rather than going directly to the register form; role cards then link to `/register`.
 - CTA buttons inside sections that call `onNavigate('register')` remain direct registration links (intentional CTAs, not nav links).
 - `.bolt/prompt` contains authoritative global UI/build instructions; not duplicated here.
-- Botpress webchat replaced with official v5.0 embed scripts: `cdn.botpress.cloud/webchat/v5.0/inject.js` + config bundle script (`files.bpcontent.cloud/.../7UTB7E09.js`, loaded with `defer`). Config bundle contains the Client ID and calls `window.botpress.init()` — removed old hardcoded bot ID and manual `init()` call.
+- Botpress webchat uses official v5.0 embed scripts: `cdn.botpress.cloud/webchat/v5.0/inject.js` + config bundle script (`files.bpcontent.cloud/.../7UTB7E09.js`, loaded with `defer`). Config bundle contains the Client ID and calls `window.botpress.init()` — removed old hardcoded bot ID and manual `init()` call.
+- Removed custom green "Ask FoodLoop" launcher and un-hid Botpress default blue button (previously `.bpFab { display: none }`) because the default Botpress button works correctly on its own.
 
 ## Open questions & assumptions
 

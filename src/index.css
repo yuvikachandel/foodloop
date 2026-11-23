@@ -49,23 +49,7 @@
   }
 }
 
-/* Botpress webchat — hide default FAB (we use our own branded launcher),
-   and position the chat panel above our custom button */
-.bpFab { display: none !important; }
-
-.bpWebchat {
-  bottom: 88px !important;
-  right: 24px !important;
-}
-
-@media (max-width: 640px) {
-  .bpWebchat {
-    bottom: 80px !important;
-    right: 12px !important;
-    left: 12px !important;
-    width: calc(100vw - 24px) !important;
-  }
-}
+/* Botpress webchat — use the default Botpress launcher button */
 
 /* Premium scrollbar */
 ::-webkit-scrollbar {

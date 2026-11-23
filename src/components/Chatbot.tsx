@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
-import { MessageCircle, X } from 'lucide-react';
+import { useEffect } from 'react';
 
 const INJECT_SCRIPT_URL = 'https://cdn.botpress.cloud/webchat/v5.0/inject.js';
 const CONFIG_SCRIPT_URL = 'https://files.bpcontent.cloud/2026/11/22/12/20261122122236-7UTB7E09.js';
@@ -57,66 +56,11 @@ function loadBotpressScripts(): Promise<void> {
 }
 
 export function Chatbot() {
-  const [open, setOpen] = useState(false);
-  const [loadError, setLoadError] = useState(false);
-
-  const openWebchat = useCallback(() => {
-    try {
-      window.botpress?.open();
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const closeWebchat = useCallback(() => {
-    try {
-      window.botpress?.close();
-    } catch {
-      // ignore
-    }
-  }, []);
-
   useEffect(() => {
-    let cancelled = false;
-
     loadBotpressScripts().catch(() => {
-      if (!cancelled) setLoadError(true);
+      // Botpress failed to load — the default button simply won't appear
     });
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
-  function handleClick() {
-    if (loadError) return;
-    if (open) {
-      closeWebchat();
-      setOpen(false);
-    } else {
-      openWebchat();
-      setOpen(true);
-    }
-  }
-
-  return (
-    <div className="fixed bottom-6 right-6 z-[60]">
-      <button
-        onClick={handleClick}
-        disabled={loadError}
-        className="group flex items-center gap-2 pl-4 pr-5 h-14 rounded-full bg-forest-600 text-white shadow-premium-lg hover:bg-forest-700 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-        title="Ask FoodLoop"
-        aria-label="Ask FoodLoop"
-      >
-        {open ? (
-          <X size={22} className="flex-shrink-0" />
-        ) : (
-          <MessageCircle size={22} className="flex-shrink-0" />
-        )}
-        <span className="text-sm font-semibold whitespace-nowrap">
-          {open ? 'Close' : 'Ask FoodLoop'}
-        </span>
-      </button>
-    </div>
-  );
+  return null;
 }

@@ -11,10 +11,10 @@ const ROLES: { value: Role; label: string; description: string }[] = [
   { value: 'volunteer', label: 'Volunteer', description: 'I can pick up and deliver food' },
 ];
 
-export function RegisterPage({ onNavigate }: { onNavigate: (page: string) => void }) {
+export function RegisterPage({ onNavigate, initialRole }: { onNavigate: (page: string) => void; initialRole?: Role }) {
   const { signUp } = useAuth();
-  const [step, setStep] = useState<'role' | 'details'>('role');
-  const [role, setRole] = useState<Role | null>(null);
+  const [step, setStep] = useState<'role' | 'details'>(initialRole ? 'details' : 'role');
+  const [role, setRole] = useState<Role | null>(initialRole ?? null);
   const [form, setForm] = useState({
     full_name: '',
     email: '',

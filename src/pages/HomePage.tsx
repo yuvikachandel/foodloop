@@ -423,6 +423,7 @@ function SafetySection() {
 function GetStarted({ onNavigate }: { onNavigate: (page: string) => void }) {
   const roles = [
     {
+      key: 'donor' as const,
       icon: <HandHeart size={28} />,
       title: 'Become a Donor',
       description: 'Restaurants, canteens, event organizers and home kitchens with surplus food to share.',
@@ -430,6 +431,7 @@ function GetStarted({ onNavigate }: { onNavigate: (page: string) => void }) {
       color: 'forest' as const,
     },
     {
+      key: 'ngo' as const,
       icon: <Building2 size={28} />,
       title: 'Register as an NGO',
       description: 'Organizations that serve meals to people in need — shelters, food banks, community kitchens.',
@@ -437,6 +439,7 @@ function GetStarted({ onNavigate }: { onNavigate: (page: string) => void }) {
       color: 'cream' as const,
     },
     {
+      key: 'volunteer' as const,
       icon: <Bike size={28} />,
       title: 'Join as a Volunteer',
       description: 'Individuals who can pick up food from donors and deliver it to NGOs in their area.',
@@ -476,7 +479,7 @@ function GetStarted({ onNavigate }: { onNavigate: (page: string) => void }) {
                 <h3 className="text-xl font-bold text-forest-800 mb-3">{role.title}</h3>
                 <p className="text-sm text-forest-600 mb-6 leading-relaxed">{role.description}</p>
                 <button
-                  onClick={() => onNavigate('register')}
+                  onClick={() => onNavigate(`register-${role.key}`)}
                   className={`w-full inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold shadow-premium transition-all active:scale-[0.98] ${c.btn}`}
                 >
                   {role.cta}

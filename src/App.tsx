@@ -10,6 +10,7 @@ import { DonorDashboard } from '@/pages/DonorDashboard';
 import { NgoDashboard } from '@/pages/NgoDashboard';
 import { VolunteerDashboard } from '@/pages/VolunteerDashboard';
 import { AdminDashboard } from '@/pages/AdminDashboard';
+import type { Role } from '@/lib/supabase';
 
 function pageFromHash(hash: string): string {
   if (!hash || hash === '#' || hash === '#home') return 'home';
@@ -44,13 +45,13 @@ function AppContent() {
 
   // Auto-redirect to dashboard when logged in and on auth pages
   useEffect(() => {
-    if (session && profile && (page === 'login' || page === 'register')) {
+    if (session && profile && (page === 'login' || page === 'register' || isRegisterRolePage)) {
       const dash = `dashboard-${profile.role}`;
       window.history.pushState(null, '', pageToHash(dash));
       setPage(dash);
       setActiveSection('');
     }
-  }, [session, profile, page]);
+  }, [session, profile, page, isRegisterRolePage]);
 
   // Scroll to a section whenever scrollTarget changes.
   useEffect(() => {
@@ -107,7 +108,9 @@ function AppContent() {
 
   // Auth guard for dashboard pages
   const isDashboardPage = page.startsWith('dashboard-');
+  const isRegisterRolePage = page.startsWith('register-');
   const requestedRole = isDashboardPage ? page.replace('dashboard-', '') : null;
+  const registerRole = isRegisterRolePage ? (page.replace('register-', '') as Role) : null;
 
   if (loading && isDashboardPage) {
     return (
@@ -153,6 +156,9 @@ function AppContent() {
       case 'dashboard-admin':
         return <AdminDashboard onNavigate={navigate} />;
       default:
+        if (isRegisterRolePage && registerRole) {
+          return <RegisterPage onNavigate={navigate} initialRole={registerRole} />;
+        }
         return <HomePage onNavigate={navigate} />;
     }
   }

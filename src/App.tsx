@@ -43,6 +43,12 @@ function AppContent() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
+  // Auth guard flags — declared before the effect that uses them
+  const isDashboardPage = page.startsWith('dashboard-');
+  const isRegisterRolePage = page.startsWith('register-');
+  const requestedRole = isDashboardPage ? page.replace('dashboard-', '') : null;
+  const registerRole = isRegisterRolePage ? (page.replace('register-', '') as Role) : null;
+
   // Auto-redirect to dashboard when logged in and on auth pages
   useEffect(() => {
     if (session && profile && (page === 'login' || page === 'register' || isRegisterRolePage)) {
@@ -105,12 +111,6 @@ function AppContent() {
       window.scrollTo(0, 0);
     }
   }, [page, profile, resolvePage]);
-
-  // Auth guard for dashboard pages
-  const isDashboardPage = page.startsWith('dashboard-');
-  const isRegisterRolePage = page.startsWith('register-');
-  const requestedRole = isDashboardPage ? page.replace('dashboard-', '') : null;
-  const registerRole = isRegisterRolePage ? (page.replace('register-', '') as Role) : null;
 
   if (loading && isDashboardPage) {
     return (

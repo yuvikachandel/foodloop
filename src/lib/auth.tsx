@@ -113,14 +113,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (profileError) {
         return { error: profileError.message };
       }
+
+      // If signUp returned a session, load the profile so the redirect
+      // to the role dashboard happens immediately. If no session (email
+      // confirmation required), the caller will show a message instead.
+      if (authData.session) {
+        await loadProfile(authData.user.id);
+      } else {
+        return { error: 'Email confirmation is required before you can sign in. Please check your inbox.' };
+      }
     }
 
     return { error: null };
   }
 
   async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
+    if (data.user) {
+      await loadProfile(data.user.id);
+    }
     return { error: null };
   }
 

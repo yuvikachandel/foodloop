@@ -1,26 +1,25 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Bike, Package, MapPin, Clock, User, CheckCircle2, Truck, PackageCheck, AlertCircle } from 'lucide-react';
-import { supabase, type PickupTask, type TaskStatus, TASK_STATUS_LABELS, TASK_STATUS_COLORS } from '@/lib/supabase';
+import { Bike, Package, MapPin, Clock, User, CheckCircle2, Truck, PackageCheck, AlertCircle, Utensils } from 'lucide-react';
+import { supabase, type PickupTask, type FoodListing, type TaskStatus, TASK_STATUS_LABELS, TASK_STATUS_COLORS, CATEGORY_ICONS, CATEGORY_LABELS } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { DashboardShell, StatCard, EmptyState, LoadingState } from '@/components/DashboardShell';
 
 export function VolunteerDashboard({ onNavigate }: { onNavigate: (page: string) => void }) {
   const { profile } = useAuth();
+  const [availableListings, setAvailableListings] = useState<FoodListing[]>([]);
   const [tasks, setTasks] = useState<PickupTask[]>([]);
-  const [availableListings, setAvailableListings] = useState<PickupTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'available' | 'mytasks'>('available');
 
-  const loadTasks = useCallback(async () => {
+  const loadData = useCallback(async () => {
     if (!profile) return;
 
-    const [openTasksRes, myTasksRes] = await Promise.all([
+    const [listingsRes, myTasksRes] = await Promise.all([
       supabase
-        .from('pickup_tasks')
-        .select('*, listing:food_listings(*), donor:profiles!pickup_tasks_donor_id_fkey(*), ngo:profiles!pickup_tasks_ngo_id_fkey(*)')
-        .is('volunteer_id', null)
-        .in('status', ['assigned'])
-        .order('assigned_at', { ascending: false }),
+        .from('food_listings')
+        .select('*, donor:profiles!food_listings_donor_id_fkey(*)')
+        .eq('status', 'available')
+        .order('created_at', { ascending: false }),
       supabase
         .from('pickup_tasks')
         .select('*, listing:food_listings(*), donor:profiles!pickup_tasks_donor_id_fkey(*), ngo:profiles!pickup_tasks_ngo_id_fkey(*)')
@@ -28,40 +27,34 @@ export function VolunteerDashboard({ onNavigate }: { onNavigate: (page: string) 
         .order('assigned_at', { ascending: false }),
     ]);
 
-    setAvailableListings((openTasksRes.data as unknown as PickupTask[]) ?? []);
+    setAvailableListings((listingsRes.data as unknown as FoodListing[]) ?? []);
     setTasks((myTasksRes.data as unknown as PickupTask[]) ?? []);
     setLoading(false);
   }, [profile]);
 
   useEffect(() => {
-    loadTasks();
-  }, [loadTasks]);
+    loadData();
+  }, [loadData]);
 
-  async function claimTask(taskId: string) {
-    if (!profile) return;
-    const { error } = await supabase
-      .from('pickup_tasks')
-      .update({ volunteer_id: profile.id, status: 'assigned' })
-      .eq('id', taskId)
-      .is('volunteer_id', null);
+  async function claimListing(listingId: string) {
+    const { error } = await supabase.rpc('claim_listing', { p_listing_id: listingId });
     if (error) {
       alert(error.message);
     } else {
-      loadTasks();
+      loadData();
       setView('mytasks');
     }
   }
 
-  async function updateStatus(taskId: string, status: TaskStatus) {
-    const update: Record<string, unknown> = { status };
-    if (status === 'delivered') {
-      update.completed_at = new Date().toISOString();
-    }
-    const { error } = await supabase.from('pickup_tasks').update(update).eq('id', taskId);
+  async function updateTaskStatus(taskId: string, status: TaskStatus) {
+    const { error } = await supabase.rpc('update_pickup_status', {
+      p_task_id: taskId,
+      p_new_status: status,
+    });
     if (error) {
       alert(error.message);
     } else {
-      loadTasks();
+      loadData();
     }
   }
 
@@ -87,7 +80,7 @@ export function VolunteerDashboard({ onNavigate }: { onNavigate: (page: string) 
       onNavigate={onNavigate}
     >
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Available Tasks" value={stats.available} icon={<Package size={18} />} />
+        <StatCard label="Available Pickups" value={stats.available} icon={<Package size={18} />} />
         <StatCard label="My Active" value={stats.myActive} icon={<Bike size={18} />} color="accent" />
         <StatCard label="In Progress" value={stats.inProgress} icon={<Truck size={18} />} color="cream" />
         <StatCard label="Delivered" value={stats.delivered} icon={<CheckCircle2 size={18} />} color="forest" />
@@ -98,7 +91,7 @@ export function VolunteerDashboard({ onNavigate }: { onNavigate: (page: string) 
           onClick={() => setView('available')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'available' ? 'bg-forest-600 text-white' : 'bg-white text-forest-600 border border-forest-100 hover:bg-forest-50'}`}
         >
-          Available Pickups
+          Available Pickups ({availableListings.length})
         </button>
         <button
           onClick={() => setView('mytasks')}
@@ -113,13 +106,13 @@ export function VolunteerDashboard({ onNavigate }: { onNavigate: (page: string) 
           {availableListings.length === 0 ? (
             <EmptyState
               icon={<Bike size={28} />}
-              title="No pickup tasks available"
-              message="When donors assign pickup tasks, they'll appear here for you to claim."
+              title="No available pickups"
+              message="When donors post surplus food, available pickups will appear here for you to claim."
             />
           ) : (
-            <div className="grid md:grid-cols-2 gap-5">
-              {availableListings.map((task) => (
-                <AvailableTaskCard key={task.id} task={task} onClaim={() => claimTask(task.id)} />
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {availableListings.map((listing) => (
+                <AvailableListingCard key={listing.id} listing={listing} onClaim={() => claimListing(listing.id)} />
               ))}
             </div>
           )}
@@ -132,12 +125,12 @@ export function VolunteerDashboard({ onNavigate }: { onNavigate: (page: string) 
             <EmptyState
               icon={<Package size={28} />}
               title="No tasks yet"
-              message="Claim an available pickup task to get started."
+              message="Claim an available pickup to get started."
             />
           ) : (
             <div className="space-y-4">
               {tasks.map((task) => (
-                <MyTaskCard key={task.id} task={task} onUpdateStatus={updateStatus} />
+                <MyTaskCard key={task.id} task={task} onUpdateStatus={updateTaskStatus} />
               ))}
             </div>
           )}
@@ -147,32 +140,30 @@ export function VolunteerDashboard({ onNavigate }: { onNavigate: (page: string) 
   );
 }
 
-function AvailableTaskCard({ task, onClaim }: { task: PickupTask; onClaim: () => void }) {
-  const expired = task.listing && new Date(task.listing.pickup_deadline) < new Date();
+function AvailableListingCard({ listing, onClaim }: { listing: FoodListing; onClaim: () => void }) {
+  const expired = new Date(listing.pickup_deadline) < new Date();
+  const donorName = listing.donor?.organization_name || listing.donor?.full_name || 'Unknown donor';
 
   return (
     <div className="card p-5 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="font-semibold text-forest-900">{task.listing?.food_name ?? 'Food pickup'}</h3>
-          <p className="text-xs text-forest-500">{task.listing?.quantity}</p>
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">{CATEGORY_ICONS[listing.category]}</span>
+          <div>
+            <h3 className="font-semibold text-forest-900">{listing.food_name}</h3>
+            <p className="text-xs text-forest-500">{CATEGORY_LABELS[listing.category]}</p>
+          </div>
         </div>
       </div>
 
       <div className="space-y-2 text-sm text-forest-700 mb-4">
-        <div className="flex items-center gap-2"><MapPin size={14} className="text-forest-400" /> From: {task.pickup_address}</div>
-        {task.delivery_address && (
-          <div className="flex items-center gap-2"><MapPin size={14} className="text-accent-500" /> To: {task.delivery_address}</div>
-        )}
-        {task.donor && (
-          <div className="flex items-center gap-2"><User size={14} className="text-forest-400" /> Donor: {task.donor.organization_name || task.donor.full_name}</div>
-        )}
-        {task.listing && (
-          <div className="flex items-center gap-2">
-            <Clock size={14} className="text-forest-400" />
-            Deadline: {new Date(task.listing.pickup_deadline).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-          </div>
-        )}
+        <div className="flex items-center gap-2"><Utensils size={14} className="text-forest-400" /> {listing.quantity}</div>
+        <div className="flex items-center gap-2"><MapPin size={14} className="text-forest-400" /> {listing.location}</div>
+        <div className="flex items-center gap-2">
+          <Clock size={14} className="text-forest-400" />
+          Pickup by: {new Date(listing.pickup_deadline).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+        </div>
+        <div className="flex items-center gap-2"><User size={14} className="text-forest-400" /> {donorName}</div>
       </div>
 
       {expired && (
@@ -181,10 +172,12 @@ function AvailableTaskCard({ task, onClaim }: { task: PickupTask; onClaim: () =>
         </div>
       )}
 
-      {task.notes && <p className="text-sm text-forest-600 bg-cream-50 rounded-lg p-3 mb-4">{task.notes}</p>}
+      {listing.description && (
+        <p className="text-sm text-forest-600 bg-cream-50 rounded-lg p-3 mb-4">{listing.description}</p>
+      )}
 
-      <button onClick={onClaim} disabled={!!expired} className="btn-primary w-full text-sm">
-        <Bike size={16} /> Claim This Task
+      <button onClick={onClaim} disabled={expired} className="btn-primary w-full text-sm">
+        <Bike size={16} /> Claim This Pickup
       </button>
     </div>
   );

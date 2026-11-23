@@ -47,9 +47,9 @@ export function RegisterPage({ onNavigate }: { onNavigate: (page: string) => voi
     setLoading(false);
     if (error) {
       setError(error);
-    } else {
-      onNavigate('dashboard');
     }
+    // On success, App.tsx auto-redirects to the role dashboard when
+    // session and profile are both loaded — no manual navigation needed.
   }
 
   return (
